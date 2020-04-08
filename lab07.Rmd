@@ -1,0 +1,330 @@
+---
+title: "Lab 7"
+author: "Alin Carrera"
+output: pdf_document
+date: "7:09PM April 8, 2020"
+---
+
+Run three OLS models on the boston housing data using all available features: 
+
+(1) where the response is medv, 
+(2) where the response is the log base 10 of medv and
+(3) where the response is the square root of medv. 
+
+Compare the two models on oos se of the residuals. Use K = 5 to create a training-test split. Which model is better? 
+
+```{r}
+pacman::p_load(MASS)
+boston = Boston
+n = nrow(boston)
+K = 5
+test_indices = sample(1 : n, 1 / K * n)
+train_indices = setdiff(1 : n, test_indices)
+X = boston[, 1:13]
+y = boston$medv
+X_train = X[train_indices, ]
+y_train = y[train_indices]
+X_test = X[test_indices, ]
+y_test = y[test_indices]
+
+mod1 = lm(y_train ~ ., X_train)
+yhat_oos1 = predict(mod1, X_test)
+oos_residuals1 = y_test - yhat_oos1
+sd(oos_residuals1)
+
+mod2 = lm(log10(y_train) ~ ., X_train)
+yhat_oos2 = predict(mod2, X_test)
+oos_residuals2 = y_test - yhat_oos2
+sd(oos_residuals2)
+
+mod3 = lm(sqrt(y_train) ~ ., X_train)
+yhat_oos3 = predict(mod3, X_test)
+oos_residuals3 = y_test - yhat_oos3
+sd(oos_residuals3)
+
+#The model where the response is medv is better.
+```
+
+When evaluating the models out of sample, did you ever extrapolate? Which predictions specifically in your test set were extrapolations? How "bad" were the exrapolations? 
+
+```{r}
+#I did not extrapolate when evalutating the models out of sample.
+```
+
+Regardless of the model that came out better, let's consider the response to be raw medv i.e. without taking a transformation. Run a model that includes all squared features (except `chas` which is binary). Does this model do better than vanilla OLS from question 1?
+
+```{r}
+degree_2_poly_mod = lm(medv ~ poly(crim, 2) + poly(zn, 2) + poly(indus, 2) + chas + poly(nox, 2) + poly(rm, 2) + poly(age, 2) + poly(dis, 2) + poly(rad, 2)  + poly(tax, 2) + poly(ptratio, 2) + poly(black, 2) + poly(lstat, 2), boston)
+summary(degree_2_poly_mod)$sigma
+summary(degree_2_poly_mod)$r.squared
+
+#It did better than mod1 from the first question. 
+```
+
+Run a model that includes all polynomail functions of degree 3 of all features (except `chas` which is binary). Does this model do better than the degree 2 polynomial function of the previous question?
+
+```{r}
+degree_3_poly_mod = lm(medv ~ poly(crim, 3) + poly(zn, 3) + poly(indus, 3) + chas + poly(nox, 3) + poly(rm, 3) + poly(age, 3) + poly(dis, 3) + poly(rad, 3)  + poly(tax, 3) + poly(ptratio, 3) + poly(black, 3) + poly(lstat, 3), boston)
+summary(degree_3_poly_mod)$sigma
+summary(degree_3_poly_mod)$r.squared
+
+#This model did better than the one from the pervioous question.
+```
+
+Use polynomial regression to perfectly fitting the following data:
+
+```{r}
+pacman::p_load(ggplot2)
+n = 10
+set.seed(1984)
+x = runif(n, 0, 10)
+y = 5 + 2 * x + rnorm(n)
+
+degree_9_poly_mod = lm(y ~ poly(x, 9))
+summary(degree_9_poly_mod)
+
+df = data.frame(x = x, y = y)
+basic = ggplot(df, aes(x, y)) +
+  geom_point()
+basic
+plot_function_degree_9 = function(x, b){
+  b[1] + b[2] * x + b[3] * x^2 + b[4] * x^3 + b[5] * x^4 + b[6] * x^5 + b[7] * x^6 + b[8] * x^7 + b[9] * x^8 + b[10] * x^9
+}
+```
+
+Illustrate Runge's phenomenon in this model by scatterplotting the data with $g(x)$ overlaid in green.
+
+```{r}
+basic + 
+  stat_function(fun = plot_function_degree_9, args = list(b = b_poly_9), col = "green")
+```
+
+For the rest of this assignment, I highly recommend using the [ggplot cheat sheet](https://rstudio.com/wp-content/uploads/2015/03/ggplot2-cheatsheet.pdf) as a reference resource. You will see questions that say "Create the best-looking plot". Among other things you may choose to do, remember to label the axes using real English, provide a title, subtitle. You may want to pick a theme and color scheme that you like and keep that constant throughout this lab. The default is fine if you are running short of time.
+
+Load up the `GSSvocab` dataset in package `carData` as `X` and drop all observations with missing measurements. Briefly summarize the documentation on this dataset. What is the data type of each variable? What is the response variable?
+
+```{r}
+pacman::p_load(ggplot2, carData)
+data(GSSvocab)
+X = na.omit(GSSvocab)
+
+# The response variable for each observation is the score on a vocabulary test. Gender and nativeBorn are binary variables. The rest of the variables are nominal catergorial variables.
+```
+
+Create two different plots and identify the best-looking plot you can to examine the `age` variable. Save the best looking plot as an appropriately-named PDF.
+
+```{r}
+ggplot(X, aes(age)) + 
+  geom_density(fill = "blue", alpha = 0.4)
+
+ggplot(X, aes(age)) +
+  geom_histogram(binwidth = 1, col = "darkgreen", fill = "blue", alpha = 0.4)
+ggsave("GSSvocab.age.pdf")
+system("open GSSvocab.age.pdf")
+```
+
+Create two different plots and identify the best looking plot you can to examine the `vocab` variable. Save the best looking plot as an appropriately-named PDF.
+
+```{r}
+ggplot(X, aes(vocab)) + 
+  geom_density(fill = "blue", alpha = 0.4)
+
+ggplot(X, aes(vocab)) +
+  geom_histogram(binwidth = .5, col = "darkgreen", fill = "blue", alpha = 0.4)
+ggsave("GSSvocab.vocab.pdf")
+system("open GSSvocab.vocab.pdf")
+```
+
+Create the best-looking plot you can to examine the `ageGroup` variable by `gender`. Does there appear to be an association? There are many ways to do this.
+
+```{r}
+ggplot(X, aes(ageGroup)) +
+  geom_histogram(data = subset(X, gender == "female"), stat = "count", col = "grey", fill = "darkgreen", alpha = 0.4) +
+  geom_histogram(data = subset(X, gender == "male"), stat = "count", col = "grey", fill = "red", alpha = 0.4)
+
+#There is an association.
+```
+
+Create the best-looking plot you can to examine the `vocab` variable by `age`. Does there appear to be an association?
+
+```{r}
+ggplot(X, aes(x = age, y = vocab)) +
+  geom_jitter(alpha = 0.1)
+
+#There appears to be no association.
+```
+
+Add an estimate of $f(x)$ using the smoothing geometry to the previous plot. Does there appear to be an association now?
+
+```{r}
+ggplot(X, aes(x = age, y = vocab)) +
+  geom_jitter(alpha = 0.1) +
+  geom_smooth() 
+
+#There does appear to be an association now.
+```
+
+Using the plot from the previous question, create the best looking overloading with variable `gender`. Does there appear to be an interaction of `gender` and `age`?
+
+```{r}
+ggplot(X, aes(x = age, y = vocab)) + 
+  geom_jitter(alpha = 0.1) +
+  geom_smooth() +
+    geom_point(aes(col = gender)) +
+    geom_smooth() +
+    geom_rug()
+
+#There appears to be no interaction between gender and age.
+```
+
+
+Using the plot from the previous question, create the best looking overloading with variable `nativeBorn`. Does there appear to be an interaction of `nativeBorn` and `age`?
+
+```{r}
+ggplot(X, aes(x = age, y = vocab)) + 
+  geom_jitter(alpha = 0.1) +
+  geom_smooth() +
+    geom_point(aes(col = nativeBorn)) +
+    geom_smooth() +
+    geom_rug()
+
+#There appears to be some interaction between nativeBorn and age.
+```
+
+Create two different plots and identify the best-looking plot you can to examine the `vocab` variable by `educGroup`. Does there appear to be an association?
+
+```{r}
+ggplot(X, aes(x = educGroup, y = vocab)) +
+  geom_jitter(alpha = 0.1)
+
+ggplot(X, aes(x = educGroup, y = vocab)) +
+  geom_point()
+
+#There appears to be no association
+```
+
+Using the best-looking plot from the previous question, create the best looking overloading with variable `gender`. Does there appear to be an interaction of `gender` and `educGroup`?
+
+```{r}
+ggplot(X, aes(x = educGroup, y = vocab)) + 
+  geom_jitter(alpha = 0.1) +
+    geom_point(aes(col = gender)) +
+    geom_smooth() +
+    geom_rug()
+
+#There appears to be an interaction between gender and educGroup.
+```
+
+Using facets, examine the relationship between `vocab` and `ageGroup`. You can drop year level `(Other)`. Are we getting dumber?
+
+```{r}
+ggplot(X, aes(x = educGroup, y = vocab)) + 
+  geom_jitter(alpha = 0.1) +
+  geom_smooth() +
+  facet_grid(ageGroup ~ .)
+
+#Doesn't seem like we're getting dumber.
+```
+
+We will now be getting some experience with speeding up R code using C++ via the `Rcpp` package.
+
+First, clear the workspace and load the `Rcpp` package.
+
+```{r}
+rm(list = ls())
+
+install.packages('Rcpp')
+pacman::p_load(Rcpp)
+```
+
+Create a variable `n` to be 10 and a vaiable `Nvec` to be 100 initially. Create a random vector via `rnorm` `Nvec` times and load it into a `Nvec` x `n` dimensional matrix.
+
+```{r}
+n = 10 
+Nvec = 100
+v = rnorm(Nvec)
+X = matrix(data = v, nrow = Nvec, ncol =  n)
+```
+
+Write a function `all_angles` that measures the angle between each of the pairs of vectors. You should measure the vector on a scale of 0 to 180 degrees with negative angles coerced to be positive.
+
+```{r}
+#TO-DO
+```
+
+Plot the density of these angles.
+
+```{r}
+#TO-DO
+```
+
+Write an Rcpp function `all_angles_cpp` that does the same thing. Use an IDE if ou want, but write it below in-line.
+
+```{r}
+#TO-DO
+```
+
+Test the time difference between these functions for `n = 1000` and `Nvec = 100, 500, 1000, 5000`.  Store the results in a matrix.
+
+```{r}
+n = 1000
+Nvec = c(100, 500, 1000, 5000)
+```
+
+Plot the divergence of performance (in log seconds) over n using a line geometry. Use two different colors for the R and CPP functions. Make sure there's a color legend on your plot.
+
+```{r}
+#TO-DO
+```
+
+Let `Nvec = 10000` and vary `n` to be 10, 100, 1000. Plot the density of angles for all three values of `n` on one plot using color to signify `n`. Make sure you have a color legend. This is not easy.
+
+```{r}
+#TO-DO
+```
+
+Write an R function `nth_fibonnaci` that finds the nth Fibonnaci number via recursion but allows you to specify the starting number. For instance, if the sequency started at 1, you get the familiar 1, 1, 2, 3, 5, etc. But if it started at 0.01, you would get 0.01, 0.01, 0.02, 0.03, 0.05, etc.
+
+```{r}
+nth_fibonacci = function(n, start){
+  if (n <= 1) {
+    return(start)
+  }
+  else 
+    return(nth_fibonacci(n - 1, start) + nth_fibonacci(n - 2, start))
+}
+```
+
+Write an Rcpp function `nth_fibonnaci_cpp` that does the same thing. Use an IDE if ou want, but write it below in-line.
+
+```{r}
+cppFunction('
+double nth_fibonacci_cpp(double n, double start) {  
+  if (n <= 1) {  
+    return n;  
+} else {  
+    return nth_fibonacci_cpp(n - 1, start) + nth_fibonacci_cpp(n - 2, start);  
+}  
+}
+')
+```
+
+Time the difference in these functions for n = 100, 200, ...., 1500 while starting the sequence at the smallest possible floating point value in R. Store the results in a matrix.
+
+```{r}
+n = seq(100 , 1500, by = 100)
+system.time({
+  nth_fibonacci(n, start)
+})
+
+system.time({
+  nth_fibonacci_cpp(n, start)
+})
+```
+
+Plot the divergence of performance (in log seconds) over n using a line geometry. Use two different colors for the R and CPP functions. Make sure there's a color legend on your plot.
+
+```{r}
+#TO-DO
+```
+
