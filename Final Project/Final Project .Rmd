@@ -1,0 +1,120 @@
+---
+title: "Final Project"
+author: "Alin Carrera"
+date: "May 24, 2020"
+output: word_document
+---
+
+```{r}
+pacman::p_load(tidyverse, magrittr, data.table, missForest, skimr)
+housing_data = read.csv("housing_data_2016_2017.csv", header = TRUE)
+skim(housing_data)
+```
+
+```{r}
+#Feature Selection
+housing = housing_data %>% 
+  select(approx_year_built, cats_allowed, coop_condo, dogs_allowed, dining_room_type, fuel_type,
+         garage_exists, kitchen_type, maintenance_cost, num_bedrooms, num_floors_in_building,
+         num_full_bathrooms, num_total_rooms, sale_price, sq_footage, walk_score)
+```
+
+```{r}
+#Adjusting the features so they can be used to run the algorithms
+housing_data_tbl = housing %>% 
+  mutate(coop_condo = factor(coop_condo, ordered = FALSE)) %>%
+  mutate(cats_allowed = ifelse(cats_allowed == "no", 0, 1)) %>%
+  mutate(dogs_allowed = ifelse(dogs_allowed == "no", 0, 1)) %>%
+  mutate(dining_room_type = factor(dining_room_type, ordered = FALSE)) %>%
+  mutate(fuel_type = factor(fuel_type, ordered = FALSE)) %>%
+  mutate(kitchen_type = factor(kitchen_type, ordered = FALSE)) %>%
+  mutate(maintenance_cost = as.numeric(gsub('[$,]', '', housing$maintenance_cost))) %>%
+  mutate(sale_price = as.numeric(gsub('[$,]', '', housing$sale_price))) %>%
+  mutate(garage_exists = ifelse(is.na(garage_exists), 0, 1))
+skim(housing)
+```
+
+```{r}
+#Dropping all the observations that had NA as a response for sale_price
+housing_tbl = housing_data_tbl %>% 
+  filter(!is.na(sale_price))
+```
+
+```{r}
+#Imputing the missing data
+missing = tbl_df(apply(is.na(housing_tbl), 2, as.numeric))
+colnames(missing) = paste("is_missing_", colnames(housing_tbl), sep = "")
+missing %<>% 
+  select_if(function(x){sum(x) > 0})
+
+housing_tbl_imp = missForest(data.frame(housing_tbl))$ximp
+skim(housing_tbl_imp)
+```
+
+```{r}
+#Creating the train-test split that will be used for the different algorithms
+set.seed(1)
+test_prop = 0.10
+train_indices = sample(1 : nrow(housing_tbl_imp), round((1 - test_prop) * nrow(housing_tbl_imp)))
+housing_tbl_imp_train = housing_tbl_imp[train_indices, ]
+y_train = housing_tbl_imp_train$sale_price
+X_train = housing_tbl_imp_train
+X_train$sale_price = NULL
+n_train = nrow(X_train)
+test_indices = setdiff(1 : nrow(housing_tbl_imp), train_indices)
+housing_tbl_imp_test = housing_tbl_imp[test_indices, ]
+y_test = housing_tbl_imp_test$sale_price
+X_test = housing_tbl_imp_test
+X_test$sale_price = NULL
+```
+
+```{r}
+#Regression Tree Modeling
+if (!pacman::p_isinstalled(YARF)){
+  pacman::p_install_gh("kapelner/YARF/YARFJARs", ref = "dev")
+  pacman::p_install_gh("kapelner/YARF/YARF", ref = "dev")
+}
+pacman::p_load(YARF)
+options(java.parameters = "-Xmx4000m")
+
+tree_mod = YARFCART(X_train, y_train, 
+           bootstrap_indices = 1 : n_train, calculate_oob_error = FALSE)
+illustrate_trees(tree_mod, max_depth = 5, open_file = TRUE)
+get_tree_num_nodes_leaves_max_depths(tree_mod)
+
+y_hat_train = predict(tree_mod, housing_tbl_imp_train)
+e = y_train - y_hat_train
+sd(e)
+1 - sd(e) / sd(y_train)
+```
+
+```{r}
+#Linear Modeling 
+linear_mod = lm(sale_price ~ ., housing_tbl_imp_train)
+summary(linear_mod)$r.squared
+summary(linear_mod)$sigma
+sd(linear_mod$residuals)
+summary(linear_mod)
+```
+
+```{r}
+#Random Forest Modeling
+y = housing_tbl_imp$sale_price
+X = housing_tbl_imp
+X$sell_price = NULL
+
+num_trees = 500
+mod_rf = YARF(X, y, num_trees = num_trees)
+mod_rf
+illustrate_trees(mod_rf, max_depth = 4, open_file = TRUE)
+
+#In sample Random Forest
+holdout_rf = YARF(housing_tbl_imp_train, housing_tbl_imp_train$sale_price, num_trees = num_trees)
+mod_rf
+
+#Out of sample RSME for the Random Forest
+rmse_rf = sd(y_test - predict(holdout_rf, housing_tbl_imp_test))
+rmse_rf
+r_squared = 1 - (sum((y_test - predict(holdout_rf, housing_tbl_imp_test))^2)/ sum((y_test - mean(y))^2))
+r_squared 
+```
